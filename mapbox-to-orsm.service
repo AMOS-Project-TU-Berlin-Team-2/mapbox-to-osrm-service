@@ -4,7 +4,7 @@ Description=Mapbox to OSRM service
 [Service]
 ExecStart=/home/mapbox-to-osrm-service/app.js
 Restart=always
-User=osrm
+User=nobody
 # Note Debian/Ubuntu uses 'nogroup', RHEL/Fedora uses 'nobody'
 Group=nogroup
 Environment=PATH=/usr/bin:/usr/local/bin
