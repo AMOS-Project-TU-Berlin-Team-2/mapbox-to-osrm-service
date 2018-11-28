@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 const http = require('http')
 
 http.createServer(onRequest).listen(3000)
