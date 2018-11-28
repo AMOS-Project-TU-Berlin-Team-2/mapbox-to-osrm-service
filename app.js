@@ -26,7 +26,9 @@ function onRequest (clientReq, clientRes) {
 
     res.on('end', () => {
       let result = JSON.parse(data)
+      clientRes.write(JSON.stringify(translateResult(result)))
       clientRes.json(translateResult(result))
+      clientRes.end('\n')
     })
   })
 
