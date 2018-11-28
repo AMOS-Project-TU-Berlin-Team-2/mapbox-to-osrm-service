@@ -2,6 +2,11 @@ const http = require('http')
 
 http.createServer(onRequest).listen(3000)
 
+/**
+ * Catch all incoming request in order to translate them.
+ * @param {Object} clientReq
+ * @param {Object} clientRes
+ */
 function onRequest (clientReq, clientRes) {
   const options = {
     hostname: 'localhost',
