@@ -56,5 +56,5 @@ function translatePath (originalPath) {
 function translateResult (originalResult) {
   let translatedResult = Object.assign({}, originalResult)
   translatedResult.uuid = 1
-  return originalResult
+  return translatedResult
 }
