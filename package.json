@@ -17,6 +17,7 @@
   },
   "homepage": "https://github.com/AMOS-Project-TU-Berlin-Team-2/mapbox-to-osrm-service#readme",
   "dependencies": {
+    "@mapbox/polyline": "^1.0.0",
     "geolib": "^2.0.24",
     "node-fetch": "^2.3.0"
   }
