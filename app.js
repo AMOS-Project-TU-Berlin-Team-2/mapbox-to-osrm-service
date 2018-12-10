@@ -2,6 +2,8 @@
 const http = require('http')
 const geolib = require('geolib')
 const fetch = require('node-fetch')
+const baseUrl = 'http://localhost:5000'
+const intersectionDist = 100
 
 http.createServer(onRequest).listen(3001)
 
@@ -11,27 +13,16 @@ http.createServer(onRequest).listen(3001)
  * @param {Object} clientRes
  */
 function onRequest (clientReq, clientRes) {
-  const options = {
-    hostname: 'localhost',
-    port: 5000,
-    path: translatePath(clientReq.url),
-    method: 'GET'
-  }
   let osrmPath = translatePath(clientReq.url)
 
-  fetch(`http://localhost:5000${osrmPath}`)
+  fetch(`${baseUrl}${osrmPath}`)
     .then(res => res.json())
     .then(result => {
       console.log(`Path ${clientReq.url} translated to ${osrmPath}`)
 
       let translatedResult = translateResult(result)
-      let destination = clientReq.url.split('/')[5].split(';')[1].split('?')[0]
-      let intersections = result.routes[0].legs.reduce((acc, leg) => {
-        return acc.concat(leg.steps.map(step => {
-          return step.intersections
-        }), [])
-      })
-
+      let destination = getDestination(clientReq.url)
+      let intersections = fetchIntersections(result.route[0])
       let alternativeRoutePromises = intersections.map(intersection => {
         return getAlternativeRoutes(intersection, destination)
       })
@@ -43,6 +34,7 @@ function onRequest (clientReq, clientRes) {
       clientRes.write(JSON.stringify(translatedResult))
       clientRes.end('\n')
     })
+}
 
 /**
  * Make sure that the directions endpoint is mapped to the routing endpoint.
@@ -52,6 +44,28 @@ function onRequest (clientReq, clientRes) {
  */
 function translatePath (originalPath) {
   return originalPath.replace('directions/v5/mapbox', 'route/v1').split('?')[0] + '?steps=true&geometries=polyline6'
+}
+
+/**
+ * Return an array of every intersection along the route
+ * @param {Object} route
+ * @return {Array} intersections
+ */
+function fetchIntersections (route) {
+  return route.legs.reduce((acc, leg) => {
+    return acc.concat(leg.steps.map(step => {
+      return step.intersections
+    }), [])
+  })
+}
+
+/**
+ * Get the destination by parsing the url in url format.
+ * @param {String} url
+ * @return {Geopoint} destination
+ */
+function getDestination (url) {
+  return toGeopoint(url.split('/')[5].split(';')[1].split('?')[0])
 }
 
 /**
@@ -66,49 +80,79 @@ function translateResult (originalResult) {
 }
 
 function getViaPoints (intersection) {
-  var initialPoint = {lat: intersection.location[1], lon: intersection.location[0]}
-  var dist = 100
-  var otherBearings = intersection.bearings
+  let initialPoint = toGeopoint(intersection.location)
+  let otherBearings = intersection.bearings
 
   // Remove bearings of current primary route
   otherBearings.splice(intersection.in, 1)
   otherBearings.splice(intersection.out, 1)
-  
+
   var viaPoints = otherBearings.map(bearing => {
-    var geoPoint = geolib.computeDestinationPoint(initialPoint, dist, bearing)
+    var geoPoint = geolib.computeDestinationPoint(initialPoint, intersectionDist, bearing)
     return geoPoint.longitude + ',' + geoPoint.latitude
   })
   return viaPoints
 }
 
-function getAlternativeRoute (intersection, viaPoints, destination, cb) {
-  getRoute(intersection.location[0] + ',' + intersection.location[1] + ';' + viaPoints[0] + ';' + destination, cb)
+/**
+ * Get alternative routes via every viapoint from the intersection.
+ * @param {Object} intersection
+ * @param {Geopoint} destination
+ * @return {Promise[]|routes} alternative routes
+ */
+function getAlternativeRoutes (intersection, destination) {
+  return new Promise((resolve, reject) => {
+    let start = toGeopoint(intersection.location)
+    let viaPoints = getViaPoints(intersection)
+    let alternativeRoutes = viaPoints.map(viaPoint => {
+      return getRoute([
+        start,
+        viaPoint,
+        destination
+      ])
+    })
+    Promise.all(alternativeRoutes).then(resolve)
+  })
 }
 
-function getRoute (points, cb) {
-  console.log(points)
-  const options = {
-    hostname: 'localhost',
-    port: 5000,
-    path: '/route/v1/driving/' + points + '?steps=true&geometries=polyline6',
-    method: 'GET'
+/**
+ * Fetch an alternative route from OSRM service.
+ * @param {Array} points
+ * @return {Promse|Route}
+ */
+function getRoute (waypoints) {
+  let coordinates = toCoordinateString(waypoints)
+  return fetch(`${baseUrl}/route/v1/driving/${coordinates}?steps=true&geometries=polyline6`)
+    .then(res => res.json())
+}
+
+/**
+ * Convert geopoints to the format OSRM understands
+ * @param {Array} waypoints
+ * @return {String} coordinate string
+ */
+function toCoordinateString (waypoints) {
+  return waypoints
+    .map(waypoint => {
+      return `${waypoint.longtitude},${waypoint.latitude}`
+    }).join(';')
+}
+
+/**
+ * Convert coordinate string or array to the generic geopoint format.
+ * @param {String} coordinateString
+ * @return {Geopoint} geopoint
+ */
+function toGeopoint (waypoint) {
+  if (typeof coordinateString === 'string') {
+    return {
+      longtitude: waypoint.split(',')[0],
+      latitude: waypoint.split(',')[1]
+    }
+  } else {
+    return {
+      longtitude: waypoint[0],
+      latitude: waypoint[1]
+    }
   }
-
-  const req = http.request(options, (res) => {
-    let data = ''
-    res.on('data', d => {
-      data += d
-    })
-
-    res.on('end', () => {
-      let result = JSON.parse(data)
-      cb(result)
-    })
-  })
-
-  req.on('error', (error) => {
-    console.error(error)
-  })
-
-  req.end()
 }
