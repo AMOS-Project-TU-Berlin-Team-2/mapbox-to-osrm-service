@@ -24,17 +24,21 @@ function onRequest (clientReq, clientRes) {
 
       let translatedResult = translateResult(result)
       let destination = getDestination(clientReq.url)
-      let intersections = fetchIntersections(result.route[0])
+      let intersections = fetchIntersections(result.routes[0])
+
       let alternativeRoutePromises = intersections.map(intersection => {
         return getAlternativeRoutes(intersection, destination)
       })
 
       Promise.all(alternativeRoutePromises).then(alternativeRoutes => {
-        translatedResult.routes.concat(alternativeRoutes)
+        alternativeRoutes.forEach(alternativeRoute => {
+          if (alternativeRoute.length === 1) {
+            translatedResult.routes.push(alternativeRoute[0].routes[0])
+          }
+        })
+        clientRes.write(JSON.stringify(translatedResult))
+        clientRes.end('\n')
       })
-
-      clientRes.write(JSON.stringify(translatedResult))
-      clientRes.end('\n')
     })
 }
 
@@ -54,11 +58,15 @@ function translatePath (originalPath) {
  * @return {Array} intersections
  */
 function fetchIntersections (route) {
-  return route.legs.reduce((acc, leg) => {
-    return acc.concat(leg.steps.map(step => {
-      return step.intersections
-    }), [])
+  let intersections = []
+  route.legs.forEach(leg => {
+    leg.steps.forEach(step => {
+      step.intersections.forEach(intersection => {
+        intersections.push(intersection)
+      })
+    })
   })
+  return intersections
 }
 
 /**
@@ -97,8 +105,7 @@ function getViaPoints (intersection) {
   otherBearings.splice(intersection.out, 1)
 
   var viaPoints = otherBearings.map(bearing => {
-    var geoPoint = geolib.computeDestinationPoint(initialPoint, intersectionDist, bearing)
-    return geoPoint.longitude + ',' + geoPoint.latitude
+    return geolib.computeDestinationPoint(initialPoint, intersectionDist, bearing)
   })
   return viaPoints
 }
@@ -143,7 +150,11 @@ function getRoute (waypoints) {
 function toCoordinateString (waypoints) {
   return waypoints
     .map(waypoint => {
-      return `${waypoint.longtitude},${waypoint.latitude}`
+      if (waypoint.longitude) {
+        waypoint.lon = waypoint.longitude
+        waypoint.lat = waypoint.latitude
+      }
+      return `${waypoint.lon},${waypoint.lat}`
     }).join(';')
 }
 
@@ -155,7 +166,7 @@ function toCoordinateString (waypoints) {
 function toGeopoint (waypoint) {
   let coordinates = (typeof waypoint === 'string') ? waypoint.split(',') : waypoint
   return {
-    longtitude: coordinates[0],
-    latitude: coordinates[1]
+    lon: coordinates[0],
+    lat: coordinates[1]
   }
 }
