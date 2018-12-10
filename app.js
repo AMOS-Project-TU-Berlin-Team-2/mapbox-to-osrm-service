@@ -1,7 +1,9 @@
 #!/usr/bin/env node
+
 const http = require('http')
 const geolib = require('geolib')
 const fetch = require('node-fetch')
+
 const baseUrl = 'http://localhost:5000'
 const intersectionDist = 100
 
@@ -79,6 +81,13 @@ function translateResult (originalResult) {
   return translatedResult
 }
 
+/**
+ * Calculate the points around the intersection.
+ * These points are intersectionDist meters away from the intersection
+ * on every unused road.
+ * @param {Object} intersection
+ * @return {Array} viaPoints
+ */
 function getViaPoints (intersection) {
   let initialPoint = toGeopoint(intersection.location)
   let otherBearings = intersection.bearings
@@ -144,15 +153,9 @@ function toCoordinateString (waypoints) {
  * @return {Geopoint} geopoint
  */
 function toGeopoint (waypoint) {
-  if (typeof coordinateString === 'string') {
-    return {
-      longtitude: waypoint.split(',')[0],
-      latitude: waypoint.split(',')[1]
-    }
-  } else {
-    return {
-      longtitude: waypoint[0],
-      latitude: waypoint[1]
-    }
+  let coordinates = (typeof waypoint === 'string') ? waypoint.split(',') : waypoint
+  return {
+    longtitude: coordinates[0],
+    latitude: coordinates[1]
   }
 }
