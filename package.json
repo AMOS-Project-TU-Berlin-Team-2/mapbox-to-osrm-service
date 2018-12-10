@@ -1,0 +1,22 @@
+{
+  "name": "mapbox-to-osrm-service",
+  "version": "1.0.0",
+  "description": "",
+  "main": "app.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AMOS-Project-TU-Berlin-Team-2/mapbox-to-osrm-service.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/AMOS-Project-TU-Berlin-Team-2/mapbox-to-osrm-service/issues"
+  },
+  "homepage": "https://github.com/AMOS-Project-TU-Berlin-Team-2/mapbox-to-osrm-service#readme",
+  "dependencies": {
+    "node-fetch": "^2.3.0"
+  }
+}

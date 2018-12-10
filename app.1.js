@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 const http = require('http')
+const polyline = require('@mapbox/polyline')
 const geolib = require('geolib')
-const fetch = require('node-fetch')
 
 http.createServer(onRequest).listen(3001)
 
@@ -17,32 +17,39 @@ function onRequest (clientReq, clientRes) {
     path: translatePath(clientReq.url),
     method: 'GET'
   }
-  let osrmPath = translatePath(clientReq.url)
 
-  fetch(`http://localhost:5000${osrmPath}`)
-    .then(res => res.json())
-    .then(result => {
-      console.log(`Path ${clientReq.url} translated to ${osrmPath}`)
+  const req = http.request(options, (res) => {
+    console.log(`Path ${clientReq.url} translated to ${options.path}`)
 
-      let translatedResult = translateResult(result)
-      let destination = clientReq.url.split('/')[5].split(';')[1].split('?')[0]
-      let intersections = result.routes[0].legs.reduce((acc, leg) => {
-        return acc.concat(leg.steps.map(step => {
-          return step.intersections
-        }), [])
-      })
-
-      let alternativeRoutePromises = intersections.map(intersection => {
-        return getAlternativeRoutes(intersection, destination)
-      })
-
-      Promise.all(alternativeRoutePromises).then(alternativeRoutes => {
-        translatedResult.routes.concat(alternativeRoutes)
-      })
-
-      clientRes.write(JSON.stringify(translatedResult))
-      clientRes.end('\n')
+    let data = ''
+    res.on('data', d => {
+      data += d
     })
+
+    res.on('end', () => {
+      let result = JSON.parse(data)
+
+      let destination = clientReq.url.split('/')[5].split(';')[1].split('?')[0]
+      let viaPoints = getViaPoints(result.routes[0].legs[0].steps[5].intersections[0], options.path)
+      console.log(destination)
+      getAlternativeRoutes(result.routes[0].legs[0].steps[5].intersections[0], viaPoints, destination, function (route) {
+        let translatedResult = translateResult(result)
+        translatedResult.routes.push(route.routes[0])
+
+        console.log(translatedResult)
+        clientRes.write(JSON.stringify(translatedResult))
+        clientRes.end('\n')
+      })
+
+    })
+  })
+
+  req.on('error', (error) => {
+    console.error(error)
+  })
+
+  req.end()
+}
 
 /**
  * Make sure that the directions endpoint is mapped to the routing endpoint.
@@ -67,7 +74,7 @@ function translateResult (originalResult) {
 
 function getViaPoints (intersection) {
   var initialPoint = {lat: intersection.location[1], lon: intersection.location[0]}
-  var dist = 100
+  var dist = 100;
   var otherBearings = intersection.bearings
 
   // Remove bearings of current primary route
@@ -81,7 +88,7 @@ function getViaPoints (intersection) {
   return viaPoints
 }
 
-function getAlternativeRoute (intersection, viaPoints, destination, cb) {
+function getAlternativeRoutes (intersection, viaPoints, destination, cb) {
   getRoute(intersection.location[0] + ',' + intersection.location[1] + ';' + viaPoints[0] + ';' + destination, cb)
 }
 
