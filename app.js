@@ -8,7 +8,7 @@ const polyline = require('@mapbox/polyline')
 const baseUrl = 'http://localhost:5000'
 const intersectionDist = 200
 
-http.createServer(onRequest).listen(3001)
+http.createServer(onRequest).listen(3000)
 
 /**
  * Catch all incoming request in order to translate them.
