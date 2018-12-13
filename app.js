@@ -3,9 +3,10 @@
 const http = require('http')
 const geolib = require('geolib')
 const fetch = require('node-fetch')
+const polyline = require('@mapbox/polyline')
 
 const baseUrl = 'http://localhost:5000'
-const intersectionDist = 100
+const intersectionDist = 200
 
 http.createServer(onRequest).listen(3001)
 
@@ -32,8 +33,9 @@ function onRequest (clientReq, clientRes) {
 
       Promise.all(alternativeRoutePromises).then(alternativeRoutes => {
         alternativeRoutes.forEach(alternativeRoute => {
-          if (alternativeRoute.length === 1) {
-            translatedResult.routes.push(alternativeRoute[0].routes[0])
+          if (alternativeRoute.length > 0) {
+            let strippedRoute = stripAlternativeRoute(alternativeRoute[0].routes[0])
+            translatedResult.routes.push(strippedRoute)
           }
         })
         clientRes.write(JSON.stringify(translatedResult))
@@ -140,6 +142,11 @@ function getRoute (waypoints) {
   let coordinates = toCoordinateString(waypoints)
   return fetch(`${baseUrl}/route/v1/driving/${coordinates}?steps=true&geometries=polyline6`)
     .then(res => res.json())
+}
+
+function stripAlternativeRoute (alternativeRoute) {
+  alternativeRoute.geometry = polyline.encode(polyline.decode(alternativeRoute.legs[0].steps[0].geometry).concat(polyline.decode(alternativeRoute.legs[0].steps[1].geometry)))
+  return alternativeRoute
 }
 
 /**
