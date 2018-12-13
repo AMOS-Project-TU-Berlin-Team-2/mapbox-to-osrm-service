@@ -35,6 +35,10 @@ function onRequest (clientReq, clientRes) {
         alternativeRoutes.forEach(alternativeRoute => {
           if (alternativeRoute.length > 0) {
             let strippedRoute = stripAlternativeRoute(alternativeRoute[0].routes[0])
+            let types = ['heavy', 'moderate']
+            strippedRoute.legs[1].annotation = {
+              congestion: new Array(polyline.decode(strippedRoute.geometry).length - 1).fill(types[Math.floor(Math.random() * 2)])
+            }
             translatedResult.routes.push(strippedRoute)
           }
         })
@@ -144,6 +148,11 @@ function getRoute (waypoints) {
     .then(res => res.json())
 }
 
+/**
+ * Only keep the first two steps of the route.
+ * @param {Object} alternativeRoute
+ * @return {Object} alternativeRoute
+ */
 function stripAlternativeRoute (alternativeRoute) {
   alternativeRoute.geometry = polyline.encode(polyline.decode(alternativeRoute.legs[0].steps[0].geometry).concat(polyline.decode(alternativeRoute.legs[0].steps[1].geometry)))
   return alternativeRoute
