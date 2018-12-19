@@ -87,7 +87,7 @@ function hasCycle (route) {
   for (let leg of route.legs) {
     for (let step of leg.steps) {
       for (let intersection of step.intersections) {
-        intersections[toGeostring(intersection.location)] = intersections[toGeostring(intersection.location)] + 1 | 0
+        intersections[toGeostring(intersection.location)] = intersections[toGeostring(intersection.location)] + 1 || 0
         if (intersections[toGeostring(intersection.location)] > 1) {
           return true
         }
