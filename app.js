@@ -10,7 +10,7 @@ const intersectionDist = 100
 const alternatives = 10
 const stripAlternative = false
 
-http.createServer(onRequest).listen(3001)
+http.createServer(onRequest).listen(3000)
 
 /**
  * Catch all incoming request in order to translate them.
