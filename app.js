@@ -6,9 +6,11 @@ const fetch = require('node-fetch')
 const polyline = require('@mapbox/polyline')
 
 const baseUrl = 'http://localhost:5000'
-const intersectionDist = 200
+const intersectionDist = 100
+const alternatives = 10
+const stripAlternative = false
 
-http.createServer(onRequest).listen(3000)
+http.createServer(onRequest).listen(3001)
 
 /**
  * Catch all incoming request in order to translate them.
@@ -25,17 +27,17 @@ function onRequest (clientReq, clientRes) {
 
       let translatedResult = translateResult(result)
       let destination = getDestination(clientReq.url)
-      let intersections = fetchIntersections(result.routes[0])
-
+      let intersections = fetchIntersections(result.routes[0], alternatives)
       let alternativeRoutePromises = intersections.map(intersection => {
         return getAlternativeRoutes(intersection, destination)
       })
 
       Promise.all(alternativeRoutePromises).then(alternativeRoutes => {
         alternativeRoutes.forEach(alternativeRoute => {
-          if (alternativeRoute.length > 0) {
-            let strippedRoute = stripAlternativeRoute(alternativeRoute[0].routes[0])
+          if (alternativeRoute.length > 0 && !hasCycle(alternativeRoute[0].routes[0])) {
+            let strippedRoute = stripAlternative ? stripAlternativeRoute(alternativeRoute[0].routes[0]) : alternativeRoute[0].routes[0]
             let types = ['heavy', 'moderate']
+
             strippedRoute.legs[1].annotation = {
               congestion: new Array(polyline.decode(strippedRoute.geometry).length - 1).fill(types[Math.floor(Math.random() * 2)])
             }
@@ -63,16 +65,40 @@ function translatePath (originalPath) {
  * @param {Object} route
  * @return {Array} intersections
  */
-function fetchIntersections (route) {
+function fetchIntersections (route, limit) {
   let intersections = []
-  route.legs.forEach(leg => {
-    leg.steps.forEach(step => {
-      step.intersections.forEach(intersection => {
+  let count = 0
+  for (let leg of route.legs) {
+    for (let step of leg.steps) {
+      for (let intersection of step.intersections) {
         intersections.push(intersection)
-      })
-    })
-  })
+        count++
+        if (count >= limit) {
+          return intersections
+        }
+      }
+    }
+  }
   return intersections
+}
+
+/**
+ * Return true if the route contains a cycle
+ * @param {Object} route
+ */
+function hasCycle (route) {
+  let intersections = {}
+  for (let leg of route.legs) {
+    for (let step of leg.steps) {
+      for (let intersection of step.intersections) {
+        intersections[toGeostring(intersection.location)] = intersections[toGeostring(intersection.location)] + 1 | 0
+        if (intersections[toGeostring(intersection.location)] > 1) {
+          return true
+        }
+      }
+    }
+  }
+  return false
 }
 
 /**
@@ -105,10 +131,13 @@ function translateResult (originalResult) {
 function getViaPoints (intersection) {
   let initialPoint = toGeopoint(intersection.location)
   let otherBearings = intersection.bearings
+  let bearingIn = otherBearings[intersection.in]
+  let bearingOut = otherBearings[intersection.out]
 
-  // Remove bearings of current primary route
-  otherBearings.splice(intersection.in, 1)
-  otherBearings.splice(intersection.out, 1)
+  // Remove bearings of current primary route and the ones ones in wrong direction
+  otherBearings = otherBearings.filter(bearing =>
+    bearing !== bearingOut && bearing !== bearingIn
+  )
 
   var viaPoints = otherBearings.map(bearing => {
     return geolib.computeDestinationPoint(initialPoint, intersectionDist, bearing)
@@ -172,6 +201,15 @@ function toCoordinateString (waypoints) {
       }
       return `${waypoint.lon},${waypoint.lat}`
     }).join(';')
+}
+
+/**
+ * Simple "hash" of waypoint
+ * @param {Array} waypoint
+ * @return {String} waypoint
+ */
+function toGeostring (waypoint) {
+  return `${waypoint[0]};${waypoint[1]}`
 }
 
 /**
