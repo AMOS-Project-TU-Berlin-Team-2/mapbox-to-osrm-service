@@ -17,37 +17,33 @@ http.createServer(onRequest).listen(3001)
  * @param {Object} clientReq
  * @param {Object} clientRes
  */
-function onRequest (clientReq, clientRes) {
+async function onRequest (clientReq, clientRes) {
   let osrmPath = translatePath(clientReq.url)
+  let result = await fetch(`${baseUrl}${osrmPath}`).then(res => res.json())
 
-  fetch(`${baseUrl}${osrmPath}`)
-    .then(res => res.json())
-    .then(result => {
-      console.log(`Path ${clientReq.url} translated to ${osrmPath}`)
+  console.log(`Path ${clientReq.url} translated to ${osrmPath}`)
 
-      let translatedResult = translateResult(result)
-      let destination = getDestination(clientReq.url)
-      let intersections = fetchIntersections(result.routes[0], alternatives)
-      let alternativeRoutePromises = intersections.map(intersection => {
-        return getAlternativeRoutes(intersection, destination)
-      })
+  let translatedResult = translateResult(result)
+  let destination = getDestination(clientReq.url)
+  let intersections = fetchIntersections(result.routes[0], alternatives)
+  let alternativeRoutes = await Promise.all(intersections.map(intersection => {
+    return getAlternativeRoutes(intersection, destination)
+  }))
 
-      Promise.all(alternativeRoutePromises).then(alternativeRoutes => {
-        alternativeRoutes.forEach(alternativeRoute => {
-          if (alternativeRoute.length > 0 && !hasCycle(alternativeRoute[0].routes[0])) {
-            let strippedRoute = stripAlternative ? stripAlternativeRoute(alternativeRoute[0].routes[0]) : alternativeRoute[0].routes[0]
-            let types = ['heavy', 'moderate']
+  alternativeRoutes.forEach(alternativeRoute => {
+    if (alternativeRoute.length > 0 && !hasCycle(alternativeRoute[0].routes[0])) {
+      let route = stripAlternative ? stripAlternativeRoute(alternativeRoute[0].routes[0]) : alternativeRoute[0].routes[0]
+      let types = ['heavy', 'moderate']
 
-            strippedRoute.legs[1].annotation = {
-              congestion: new Array(polyline.decode(strippedRoute.geometry).length - 1).fill(types[Math.floor(Math.random() * 2)])
-            }
-            translatedResult.routes.push(strippedRoute)
-          }
-        })
-        clientRes.write(JSON.stringify(translatedResult))
-        clientRes.end('\n')
-      })
-    })
+      route.legs[1].annotation = {
+        congestion: new Array(polyline.decode(route.geometry).length - 1).fill(types[Math.floor(Math.random() * 2)])
+      }
+      translatedResult.routes.push(route)
+    }
+  })
+
+  clientRes.write(JSON.stringify(translatedResult))
+  clientRes.end('\n')
 }
 
 /**
