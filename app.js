@@ -7,7 +7,7 @@ const polyline = require('@mapbox/polyline')
 
 const baseUrl = 'http://localhost:5000'
 const intersectionDist = 100
-const alternatives = 10
+const alternatives = 3
 const stripAlternative = false
 
 http.createServer(onRequest).listen(3000)
@@ -33,10 +33,9 @@ async function onRequest (clientReq, clientRes) {
   alternativeRoutes.forEach(alternativeRoute => {
     if (alternativeRoute.length > 0 && !hasCycle(alternativeRoute[0].routes[0])) {
       let route = stripAlternative ? stripAlternativeRoute(alternativeRoute[0].routes[0]) : alternativeRoute[0].routes[0]
-      let types = ['heavy', 'moderate']
 
       route.legs[1].annotation = {
-        congestion: new Array(polyline.decode(route.geometry).length - 1).fill(types[Math.floor(Math.random() * 2)])
+        congestion: new Array(polyline.decode(route.geometry).length - 1).fill(getColor(route, translatedResult.routes[0]))
       }
       translatedResult.routes.push(route)
     }
@@ -64,9 +63,12 @@ function translatePath (originalPath) {
 function fetchIntersections (route, limit) {
   let intersections = []
   let count = 0
+  let duration = 0
   for (let leg of route.legs) {
     for (let step of leg.steps) {
+      duration += step.duration
       for (let intersection of step.intersections) {
+        intersection.duration = duration
         intersections.push(intersection)
         count++
         if (count >= limit) {
@@ -158,7 +160,17 @@ function getAlternativeRoutes (intersection, destination) {
         destination
       ])
     })
-    Promise.all(alternativeRoutes).then(resolve)
+
+    Promise.all(alternativeRoutes).then(routes => {
+      let sortedRoutes = routes.sort((a, b) => {
+        return a.routes[0].duration > b.routes[0].duration ? 1 : -1
+      })
+      sortedRoutes.map(route => {
+        route.routes[0].duration = route.routes[0].duration + intersection.duration
+        return route
+      })
+      resolve(sortedRoutes)
+    })
   })
 }
 
@@ -171,6 +183,22 @@ function getRoute (waypoints) {
   let coordinates = toCoordinateString(waypoints)
   return fetch(`${baseUrl}/route/v1/driving/${coordinates}?steps=true&geometries=polyline6`)
     .then(res => res.json())
+}
+
+/**
+ * Determine color of route based on extra time
+ * @param {Object} alternativeRoute
+ * @param {Object} originalRoute
+ */
+function getColor (alternativeRoute, originalRoute) {
+  let extraTime = alternativeRoute.duration - originalRoute.duration
+  let extraPercentage = alternativeRoute.duration / originalRoute.duration
+  
+  if (extraTime < 100 || extraPercentage < 1.05) {
+    return 'moderate'
+  } else {
+    return 'heavy'
+  }
 }
 
 /**
