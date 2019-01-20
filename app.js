@@ -4,6 +4,7 @@ const http = require('http')
 const geolib = require('geolib')
 const fetch = require('node-fetch')
 const polyline = require('@mapbox/polyline')
+const osrmTextInstructions = require('osrm-text-instructions')('v5')
 
 const baseUrl = 'http://localhost:5000'
 const intersectionDist = 100
@@ -26,6 +27,7 @@ async function onRequest (clientReq, clientRes) {
   let translatedResult = translateResult(result)
   let destination = getDestination(clientReq.url)
   let intersections = fetchIntersections(result.routes[0], alternatives)
+  translatedResult.routes[0] = fetchInstructions(result.routes[0])
   let alternativeRoutes = await Promise.all(intersections.map(intersection => {
     return getAlternativeRoutes(intersection, destination)
   }))
@@ -52,7 +54,7 @@ async function onRequest (clientReq, clientRes) {
  * @return {String} translatedPath
  */
 function translatePath (originalPath) {
-  return originalPath.replace('directions/v5/mapbox', 'route/v1').split('?')[0] + '?steps=true&geometries=polyline6'
+  return originalPath.replace('directions/v5/mapbox', 'route/v1').split('?')[0] + '?steps=true&geometries=polyline6&annotations=true&overview=full&continue_straight=true'
 }
 
 /**
@@ -78,6 +80,44 @@ function fetchIntersections (route, limit) {
     }
   }
   return intersections
+}
+
+/**
+ * Add text instructions to OSRM steps
+ * @param {Object} route
+ * @return {Object} route
+ */
+function fetchInstructions (route) {
+  route.legs.map(leg => {
+    for (let i = 0; i < leg.steps.length; i++) {
+      leg.steps[i].maneuver.instruction = ''
+      if (typeof leg.steps[i + 1] === 'undefined') {
+        return
+      }
+      leg.steps[i].voiceInstructions = [{
+        distanceAlongGeometry: leg.steps[i].distance,
+        announcement: osrmTextInstructions.compile('en', leg.steps[i + 1]),
+        ssmlAnnouncement: '<speak><amazon:effect name="drc"><prosody rate="1.08">' + osrmTextInstructions.compile('en', leg.steps[i + 1]) + '</prosody></amazon:effect></speak>'
+      }]
+      leg.steps[i].bannerInstructions = [{
+        distanceAlongGeometry: leg.steps[i].distance,
+        primary: {
+          text: osrmTextInstructions.getWayName('en', leg.steps[i + 1]),
+          components: [{
+            text: osrmTextInstructions.compile('en', leg.steps[i + 1]),
+            type: 'text'
+          }],
+          type: leg.steps[i + 1].maneuver.type,
+          modifier: leg.steps[i + 1].maneuver.modifier,
+          degrees: leg.steps[i + 1].maneuver.bearing_after,
+          driving_side: 'right'
+        },
+        secondary: null
+      }]
+    }
+    return leg
+  })
+  return route
 }
 
 /**
@@ -193,7 +233,7 @@ function getRoute (waypoints) {
 function getColor (alternativeRoute, originalRoute) {
   let extraTime = alternativeRoute.duration - originalRoute.duration
   let extraPercentage = alternativeRoute.duration / originalRoute.duration
-  
+
   if (extraTime < 100 || extraPercentage < 1.05) {
     return 'moderate'
   } else {

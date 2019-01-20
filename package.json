@@ -19,6 +19,7 @@
   "dependencies": {
     "@mapbox/polyline": "^1.0.0",
     "geolib": "^2.0.24",
-    "node-fetch": "^2.3.0"
+    "node-fetch": "^2.3.0",
+    "osrm-text-instructions": "^0.13.2"
   }
 }
