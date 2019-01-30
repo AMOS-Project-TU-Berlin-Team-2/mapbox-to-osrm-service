@@ -6,7 +6,7 @@ const fetch = require('node-fetch')
 const polyline = require('@mapbox/polyline')
 const osrmTextInstructions = require('osrm-text-instructions')('v5')
 
-const baseUrl = 'http://51.68.139.245:5000'
+const baseUrl = 'http://localhost:5000'
 const intersectionDist = 100
 const alternatives = 3
 const stripAlternative = false
