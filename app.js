@@ -6,7 +6,7 @@ const fetch = require('node-fetch')
 const polyline = require('@mapbox/polyline')
 const osrmTextInstructions = require('osrm-text-instructions')('v5')
 
-const baseUrl = 'http://localhost:5000'
+const baseUrl = 'http://51.68.139.245:5000'
 const intersectionDist = 100
 const alternatives = 3
 const stripAlternative = false
@@ -26,6 +26,7 @@ async function onRequest (clientReq, clientRes) {
 
   let translatedResult = translateResult(result)
   let destination = getDestination(clientReq.url)
+  let origin = getOrigin(clientReq.url);
   let intersections = fetchIntersections(result.routes[0], alternatives)
   translatedResult.routes[0] = fetchInstructions(result.routes[0])
   let alternativeRoutes = await Promise.all(intersections.map(intersection => {
@@ -33,7 +34,7 @@ async function onRequest (clientReq, clientRes) {
   }))
 
   alternativeRoutes.forEach(alternativeRoute => {
-    if (alternativeRoute.length > 0 && !hasCycle(alternativeRoute[0].routes[0])) {
+    if (alternativeRoute.length > 0 && !hasCycle(alternativeRoute[0].routes[0],alternativeRoute[0].waypoints,origin)) {
       let route = stripAlternative ? stripAlternativeRoute(alternativeRoute[0].routes[0]) : alternativeRoute[0].routes[0]
 
       route.legs[1].annotation = {
@@ -123,12 +124,37 @@ function fetchInstructions (route) {
 /**
  * Return true if the route contains a cycle
  * @param {Object} route
+ * @param {Array} waypoints
+ * @param {Geopoint} origin
  */
-function hasCycle (route) {
-  let intersections = {}
-  for (let leg of route.legs) {
-    for (let step of leg.steps) {
-      for (let intersection of step.intersections) {
+function hasCycle (route,waypoints,origin) {
+
+  // Checks if there are U-turns with waypoints distance ; Could do it with the intersection distance but seems complicated
+  if(waypoints.length !==0) {
+      let distanceCounter = 0;
+      for (let waypoint of waypoints) {
+          if (waypoint.distance) {
+              if (waypoint.distance > distanceCounter)
+                  distanceCounter = waypoint.distance;
+              if (waypoint.distance < distanceCounter)
+                  return true;
+          }
+      }
+  }
+
+
+  let intersections = {};
+  for (let [legIndex,leg] of route.legs.entries()) {
+    for (let [stepIndex,step] of leg.steps.entries()) {
+      for (let [intersectionIndex,intersection] of step.intersections.entries()) {
+
+      // If intersection not far from origin and it isn't the first one of the first step of the first....
+        if((intersectionIndex!==0 &&
+            stepIndex !==0 &&
+            legIndex !==0 ) &&
+            !checkDistance(toGeopoint(""+intersection.location[0]+","+intersection.location[1]+""),origin,25/1000)) // Distance in km
+            return true;
+
         intersections[toGeostring(intersection.location)] = intersections[toGeostring(intersection.location)] + 1 || 0
         if (intersections[toGeostring(intersection.location)] > 1) {
           return true
@@ -147,6 +173,39 @@ function hasCycle (route) {
 function getDestination (url) {
   return toGeopoint(url.split('/')[5].split(';')[1].split('?')[0])
 }
+
+
+/**
+ * Check the distance between two points by parsing the url in url format.
+ * @param {Geopoint} firstGeo
+ * @param {Geopoint} secondGeo
+ * @param {number} distance
+ */
+ // Check https://stackoverflow.com/questions/27928/calculate-distance-between-two-latitude-longitude-points-haversine-formula
+ // Haversine formula
+
+function checkDistance(firstGeo,secondGeo,distance){
+    let p = 0.017453292519943295;    // Math.PI / 180
+    let c = Math.cos;
+    let a = 0.5 - c((secondGeo.lat - firstGeo.lat) * p)/2 +
+        c(firstGeo.lat * p) * c(secondGeo.lat * p) *
+        (1 - c((secondGeo.lon - firstGeo.lon) * p))/2;
+
+    let calculatedDistance = 12742 * Math.asin(Math.sqrt(a)); // 2 * R; R = 6371 km
+    return calculatedDistance>distance
+}
+
+
+
+/**
+ * Get the destination by parsing the url in url format.
+ * @param {String} url
+ * @return {Geopoint} destination
+ */
+function getOrigin (url) {
+    return toGeopoint(url.split('/')[5].split(';')[0])
+}
+
 
 /**
  * The mapbox sdk needs a uuid, crashes otherwise. So append one here.
