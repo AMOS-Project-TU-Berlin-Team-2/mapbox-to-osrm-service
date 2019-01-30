@@ -176,7 +176,7 @@ function getDestination (url) {
 
 
 /**
- * Check the distance between two points by parsing the url in url format.
+ * Check the distance between two points
  * @param {Geopoint} firstGeo
  * @param {Geopoint} secondGeo
  * @param {number} distance
@@ -198,9 +198,9 @@ function checkDistance(firstGeo,secondGeo,distance){
 
 
 /**
- * Get the destination by parsing the url in url format.
+ * Get the origin by parsing the url in url format.
  * @param {String} url
- * @return {Geopoint} destination
+ * @return {Geopoint} origin
  */
 function getOrigin (url) {
     return toGeopoint(url.split('/')[5].split(';')[0])
