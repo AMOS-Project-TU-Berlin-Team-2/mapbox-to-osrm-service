@@ -8,7 +8,7 @@ const osrmTextInstructions = require('osrm-text-instructions')('v5')
 
 const baseUrl = 'http://localhost:5000'
 const intersectionDist = 100
-const alternatives = 3
+const alternatives = 5;
 const stripAlternative = false
 
 http.createServer(onRequest).listen(3000)
